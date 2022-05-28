@@ -1,0 +1,126 @@
+#include <ESP8266WiFi.h>
+#include<WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+
+#ifdef ESP32
+#pragma message(THIS EXAMPLE IS FOR ESP8266 ONLY!)
+#error Select ESP8266 board.
+#endif
+
+ESP8266WebServer server(80); // 80 is the port number
+
+const char* ssid = "H-1502";
+const char* password = "9634548386";
+const char* APssid = "Home automation";
+const char* APpassword = "7599401502";
+
+void Roomapi(){
+  String rooms_data="{\"rooms\":[{\"room_id\":1,\"name\":\"Living Room\",\"applianceCount\":5,\"appliances\":[{\"appliance_id\":1,\"name\":\"AC\",\"desc\":\"Samsung AC\",\"image\":\"ic_air_conditioner.png\",\"status\":true},{\"appliance_id\":2,\"name\":\"Television\",\"desc\":\"Sony TV\",\"image\":\"ic_monitor.png\",\"status\":true},{\"appliance_id\":3,\"name\":\"Ceiling Fan\",\"desc\":\"Usha Fan\",\"image\":\"ic_fan.png\",\"status\":false},{\"appliance_id\":4,\"name\":\"Lights\",\"desc\":\"Philips 900\",\"image\":\"ic_idea.png\",\"status\":false},{\"appliance_id\":5,\"name\":\"Computer\",\"desc\":\"Intel PC\",\"image\":\"ic_monitor.png\",\"status\":true}]},{\"room_id\":2,\"name\":\"Bed Room\",\"applianceCount\":4,\"appliances\":[{\"appliance_id\":1,\"name\":\"AC\",\"desc\":\"Samsung AC\",\"image\":\"ic_air_conditioner.png\",\"status\":true},{\"appliance_id\":2,\"name\":\"Television\",\"desc\":\"Sony TV\",\"image\":\"ic_monitor.png\",\"status\":false},{\"appliance_id\":3,\"name\":\"Ceiling Fan\",\"desc\":\"Usha Fan\",\"image\":\"ic_fan.png\",\"status\":true},{\"appliance_id\":4,\"name\":\"Lights\",\"desc\":\"Philips 900\",\"image\":\"ic_idea.png\",\"status\":true}]},{\"room_id\":3,\"name\":\"Kitchen\",\"applianceCount\":4,\"appliances\":[{\"appliance_id\":2,\"name\":\"Television\",\"desc\":\"Sony TV\",\"image\":\"ic_monitor.png\",\"status\":true},{\"appliance_id\":3,\"name\":\"Ceiling Fan\",\"desc\":\"Usha Fan\",\"image\":\"ic_fan.png\",\"status\":false},{\"appliance_id\":4,\"name\":\"Lights\",\"desc\":\"Philips 900\",\"image\":\"ic_idea.png\",\"status\":true},{\"appliance_id\":5,\"name\":\"Computer\",\"desc\":\"Intel PC\",\"image\":\"ic_monitor.png\",\"status\":false}]},{\"room_id\":4,\"name\":\"Store Room\",\"applianceCount\":2,\"appliances\":[{\"appliance_id\":4,\"name\":\"Lights\",\"desc\":\"Philips 900\",\"image\":\"ic_idea.png\",\"status\":true},{\"appliance_id\":5,\"name\":\"Computer\",\"desc\":\"Intel PC\",\"image\":\"ic_monitor.png\",\"status\":false}]},{\"room_id\":5,\"name\":\"Dressing Room\",\"applianceCount\":5,\"appliances\":[{\"appliance_id\":1,\"name\":\"Television\",\"desc\":\"Sony TV\",\"image\":\"ic_monitor.png\",\"status\":false},{\"appliance_id\":2,\"name\":\"AC\",\"desc\":\"Samsung AC\",\"image\":\"ic_air_conditioner.png\",\"status\":true},{\"appliance_id\":3,\"name\":\"Ceiling Fan\",\"desc\":\"Usha Fan\",\"image\":\"ic_fan.png\",\"status\":false},{\"appliance_id\":4,\"name\":\"Lights\",\"desc\":\"Philips 900\",\"image\":\"ic_idea.png\",\"status\":true},{\"appliance_id\":5,\"name\":\"Computer\",\"desc\":\"Intel PC\",\"image\":\"ic_monitor.png\",\"status\":true}]}]}";
+  Serial.print("Rooms data api called");
+  server.send(200,"text/json",rooms_data);
+}
+
+
+void Roomswitch(){
+  String msg;
+  String postData;
+  msg=server.arg("room_number")+server.arg("appliance_number")+server.arg("isChecked");
+  String room_number=server.arg("room_number");
+  String appliance_number=server.arg("appliance_number");
+  String isChecked=server.arg("isChecked");
+  appliance_status(room_number,appliance_number,isChecked);
+}
+
+void appliance_status(String room_number,String appliance_number,String isChecked){
+  String room=room_number;
+  if(room.equals("1")){
+    appliance_control(appliance_number,isChecked);
+  }else{
+    HTTPClient http;    //Declare object of class HTTPClient
+    String postData;
+    //Post Data
+    postData =  "appliance_number="+appliance_number+"&isChecked="+isChecked;
+    String requestUrl="http://192.168.10.";
+    requestUrl+=room;
+    requestUrl+="/appliance_control";
+    Serial.print(requestUrl);
+    http.begin(requestUrl);
+    http.addHeader("Content-Type","application/x-www-form-urlencoded");
+    int statusCode=http.POST(postData);
+    if(statusCode>0){
+      //String payload=http.getString();
+        
+     // Serial.print(payload);
+    }else{
+      Serial.print("Error");
+    }
+    http.end();  //Close connection
+  }
+  
+}
+
+void appliance_control(String appliance_number,String isChecked){
+  int pin_arr[]={16,5,4,0,2};
+  if(isChecked.equals("true")){
+    digitalWrite(pin_arr[appliance_number.toInt()],HIGH);
+  }
+  else{
+    digitalWrite(pin_arr[appliance_number.toInt()],LOW);
+  }
+}
+
+
+void setup() {
+
+  Serial.begin(115200);
+  WiFi.mode(WIFI_AP_STA);
+  IPAddress router_local_IP(192,168,1,201);//your router IP ( 192.168.0.x, or 192.168.1.x). Make sure your chosen static IP matches those first 3
+  IPAddress router_dns(192,168,1,1);
+  IPAddress router_gateway(192,168,1,1);
+  IPAddress router_subnet(255,255,255,0);
+  WiFi.config(router_local_IP,router_gateway,router_subnet,router_dns);
+  WiFi.begin(ssid, password);
+  IPAddress local_IP(192,168,10,1);
+  IPAddress subnet(255,255,255,0);
+  WiFi.softAP(APssid,APpassword);
+  WiFi.softAPConfig(local_IP,local_IP,subnet);
+
+  while (WiFi.status() != WL_CONNECTED){
+    Serial.print("connecting ...");
+    delay(500);
+  }
+
+  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.softAPIP());
+
+  server.on("/rooms",Roomapi);
+  server.on("/roomswitch",HTTP_GET,Roomswitch);
+  server.begin();
+
+  //RELAY IN PINs
+  pinMode(16, OUTPUT);//D0
+  pinMode(5, OUTPUT);//D1
+  pinMode(4, OUTPUT);//D2
+  pinMode(0, OUTPUT);//D3
+  pinMode(2, OUTPUT);//D4
+  
+  //RELAY VCC PINs
+  pinMode(14, OUTPUT);//D5
+  pinMode(12, OUTPUT);//D6
+  pinMode(13, OUTPUT);//D7
+  pinMode(15, OUTPUT);//D8
+
+
+  digitalWrite(14, HIGH);
+  digitalWrite(12, HIGH);
+  digitalWrite(13, HIGH);
+  digitalWrite(15, HIGH);
+
+}
+
+void loop()
+{
+  server.handleClient();
+  delay(500);
+}
